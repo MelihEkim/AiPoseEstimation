@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MotionMind - Hareket ve Süre Seçimi</title>
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%); display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .container { background-color: white; padding: 40px; border-radius: 16px; box-shadow: 0 6px 20px rgba(0,0,0,0.2); text-align: center; width: 90%; max-width: 500px; }
+        .logo { width: 140px; height: auto; margin-bottom: 10px; }
+        h2 { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-size: 16px; text-align: left; }
+        .form-control { display: block; width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; margin-bottom: 15px; box-sizing: border-box; }
+        input[type="submit"] { background-color: #4CAF50; color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 16px; width: 100%; }
+        input[type="submit"]:hover { background-color: #45a049; }
+        .nav-links a { display: inline-block; margin: 10px; text-decoration: none; color: #2196F3; }
+
+       
+        #chatbot-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        #chatbot-toggle-button {
+            background-color: #0d6efd;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 55px;
+            height: 55px;
+            font-size: 28px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+            transition: transform 0.2s ease-in-out;
+            position: relative;
+        }
+         #chatbot-toggle-button:hover {
+             transform: scale(1.1);
+         }
+        #chatbot-toggle-button .tooltiptext {
+            visibility: hidden;
+            width: 80px;
+            background-color: #555;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px 0;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -40px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 12px;
+        }
+        #chatbot-toggle-button:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        #chatbot-window {
+            display: none;
+            position: absolute;
+            bottom: 75px;
+            right: 0;
+            width: 320px;
+            max-height: 450px;
+            height: 70vh;
+            background-color: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+            flex-direction: column;
+            overflow: hidden;
+            transition: all 0.3s ease-in-out;
+        }
+         #chatbot-window.open {
+             display: flex;
+         }
+
+        #chatbot-header {
+            background-color: #f8f9fa;
+            padding: 12px 15px;
+            font-weight: 600;
+            border-bottom: 1px solid #dee2e6;
+            text-align: center;
+            position: relative;
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+        }
+        #chatbot-header-title {
+           
+            flex-grow: 1; 
+            text-align: center; 
+            margin: 0 10px; 
+        }
+
+         #chatbot-clear-button {
+             background: none;
+             border: none;
+             font-size: 18px; 
+             cursor: pointer;
+             color: #6c757d;
+             padding: 0 5px; 
+             order: -1; 
+         }
+         #chatbot-clear-button:hover {
+             color: #dc3545; 
+         }
+
+         #chatbot-close-button {
+             
+             background: none;
+             border: none;
+             font-size: 18px;
+             cursor: pointer;
+             color: #6c757d;
+             padding: 0 5px; 
+         }
+         #chatbot-close-button:hover {
+             color: #000;
+         }
+
+        #chatbot-messages {
+            flex-grow: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background-color: #e9ecef;
+        }
+
+        .user-message, .bot-message {
+            padding: 10px 14px;
+            border-radius: 18px;
+            max-width: 85%;
+            word-wrap: break-word;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+         .initial-bot-message {
+             
+         }
+
+        .user-message {
+            background-color: #cfe2ff;
+            color: #004085;
+            align-self: flex-end;
+            border-bottom-right-radius: 6px;
+        }
+        .bot-message {
+            background-color: #ffffff;
+            color: #343a40;
+            align-self: flex-start;
+            border-bottom-left-radius: 6px;
+            border: 1px solid #dee2e6;
+        }
+        .bot-message a {
+            color: #0d6efd;
+            font-weight: 500;
+            text-decoration: underline;
+        }
+         .bot-message a:hover {
+             color: #0a58ca;
+         }
+        .bot-message ul {
+            margin-top: 5px;
+            margin-bottom: 5px;
+            padding-left: 20px;
+        }
+         .bot-message li {
+             margin-bottom: 3px;
+         }
+
+        #chatbot-input-area {
+            display: flex;
+            padding: 12px;
+            border-top: 1px solid #dee2e6;
+            background-color: #f8f9fa;
+        }
+
+        #chatbot-input {
+            flex-grow: 1;
+            border: 1px solid #ced4da;
+            border-radius: 20px;
+            padding: 10px 15px;
+            margin-right: 8px;
+            font-size: 14px;
+        }
+         #chatbot-input:focus {
+             outline: none;
+             border-color: #86b7fe;
+             box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+         }
+
+        #chatbot-send-button {
+            background-color: #0d6efd;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.2s ease;
+        }
+        #chatbot-send-button:hover {
+            background-color: #0b5ed7;
+        }
+
+         .loading .dot { display: inline-block; animation: blink 1.4s infinite both; }
+         .loading .dot:nth-child(2) { animation-delay: 0.2s; }
+         .loading .dot:nth-child(3) { animation-delay: 0.4s; }
+         @keyframes blink { 0%, 80%, 100% { opacity: 0; } 40% { opacity: 1; } }
+         
+    </style>
+</head>
+<body>
+<div class="container">
+    <img src="{{ url_for('static', filename='img/motionmind_logo.png') }}" alt="MotionMind" class="logo">
+    <h2>MotionMind - Hareket ve Süre Seçimi</h2>
+    <form action="/start" method="POST">
+        <label for="movement">Hareket Seçin:</label>
+        <select name="movement" id="movement" class="form-control" required>
+            <option value="squat">Squat</option>
+            <option value="pushup">Push-up</option>
+            <option value="plank">Plank</option>
+            <option value="lunge">Lunge</option>
+            <option value="jumping_jack">Jumping Jack</option>
+            <option value="situp">Sit-up</option>
+            <option value="mountain_climber">Mountain Climber</option>
+            <option value="side_plank">Side Plank</option>
+            <option value="shoulder_press">Shoulder Press</option>
+            <option value="high_knees">High Knees</option>
+            <option value="dumbbell_curl">Dumbbell Curl</option>
+        </select>
+        <label for="duration">Süre (dakika):</label>
+        <input type="number" name="duration" id="duration" min="1" max="60" class="form-control" required>
+        <input type="submit" value="Başla">
+    </form>
+    <div class="nav-links">
+        <a href="/history">Geçmiş</a> |
+        <a href="/progress">Gelişim Grafiği</a> |
+        <a href="/logout">Çıkış</a>
+    </div>
+</div>
+
+<!-- CHATBOT -->
+<div id="chatbot-container">
+    <button id="chatbot-toggle-button">🤖<span class="tooltiptext">Yardım?</span></button>
+    <div id="chatbot-window">
+        <div id="chatbot-header">
+            <button id="chatbot-clear-button" title="Sohbeti Temizle">🗑️</button>
+            <span id="chatbot-header-title">MotionMind Asistanı</span>
+            <span id="chatbot-close-button" title="Kapat">✖</span>
+        </div>
+        <div id="chatbot-messages">
+            <div class="bot-message initial-bot-message">Merhaba! Ben MotionMind Asistanı. Size nasıl yardımcı olabilirim? ('Yardım' yazabilirsiniz)</div>
+        </div>
+        <div id="chatbot-input-area">
+            <input type="text" id="chatbot-input" placeholder="Mesajınızı yazın...">
+            <button id="chatbot-send-button">Gönder</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const toggleButtonJS = document.getElementById('chatbot-toggle-button');
+const chatWindowJS = document.getElementById('chatbot-window');
+const messagesContainerJS = document.getElementById('chatbot-messages');
+const inputFieldJS = document.getElementById('chatbot-input');
+const sendButtonJS = document.getElementById('chatbot-send-button');
+const closeButtonJS = document.getElementById('chatbot-close-button');
+const clearButtonJS = document.getElementById('chatbot-clear-button');
+
+function openChat() { chatWindowJS.style.display = 'flex'; inputFieldJS.focus(); }
+function closeChat() { chatWindowJS.style.display = 'none'; }
+function clearChatHistory() {
+    const initialMessage = messagesContainerJS.querySelector('.initial-bot-message');
+    messagesContainerJS.innerHTML = '';
+    if (initialMessage) { messagesContainerJS.appendChild(initialMessage); }
+}
+toggleButtonJS.addEventListener('click', () => { chatWindowJS.style.display = (chatWindowJS.style.display === 'none' || chatWindowJS.style.display === '') ? 'flex' : 'none'; });
+closeButtonJS.addEventListener('click', closeChat);
+clearButtonJS.addEventListener('click', clearChatHistory);
+
+function sendMessageJS() {
+    const messageText = inputFieldJS.value.trim();
+    if (messageText === '') return;
+    appendMessageJS(messageText, 'user');
+    inputFieldJS.value = '';
+    inputFieldJS.focus();
+    appendMessageJS("...", 'bot', true);
+    fetch('/get_bot_response', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: messageText }) })
+        .then(response => { if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); } return response.json(); })
+        .then(data => { removeLoadingMessageJS(); appendMessageJS(data.response, 'bot'); })
+        .catch((error) => { removeLoadingMessageJS(); console.error('Chatbot Hatası:', error); appendMessageJS(`Üzgünüm, bir hata oluştu: ${error.message}`, 'bot'); });
+}
+function appendMessageJS(text, sender, isLoading = false) {
+    const messageElement = document.createElement('div');
+    messageElement.classList.add(sender === 'user' ? 'user-message' : 'bot-message');
+    if (isLoading) { messageElement.classList.add('loading'); messageElement.innerHTML = '<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>'; }
+    else { messageElement.innerHTML = text; }
+    messagesContainerJS.appendChild(messageElement);
+    messagesContainerJS.scrollTop = messagesContainerJS.scrollHeight;
+}
+function removeLoadingMessageJS() { const loadingElement = messagesContainerJS.querySelector('.loading'); if (loadingElement) { messagesContainerJS.removeChild(loadingElement); } }
+sendButtonJS.addEventListener('click', sendMessageJS);
+inputFieldJS.addEventListener('keypress', (event) => { if (event.key === 'Enter') { event.preventDefault(); sendMessageJS(); } });
+</script>
+
+</body>
+</html>
+
