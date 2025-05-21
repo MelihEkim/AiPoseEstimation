@@ -52,6 +52,7 @@ dogru_yapiliyor = False
 kayit_edildi = False
 last_instruction_time = 0
 start_time = time.time()
+initial_instruction_given = False
 
 module_map = {
     "squat": squat,
@@ -69,6 +70,11 @@ module_map = {
 movement_module = module_map[movement]
 
 print("Kamera thread ile başlatıldı.")
+
+# Give initial instructions when exercise starts
+if not initial_instruction_given:
+    play_correct_instruction(movement)
+    initial_instruction_given = True
 
 while True:
     success, frame = vs.read()
