@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Seans Başladı</title>
+    <style>
+        body {
+            background: linear-gradient(to right, #74ebd5, #ACB6E5);
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        h2 {
+            color: #333;
+            margin-top: 20px;
+        }
+        p {
+            color: #555;
+        }
+        .video-container {
+            display: inline-block;
+            background: black;
+            padding: 10px;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+            margin-top: 20px;
+        }
+        .btn-group {
+            margin-top: 25px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: 0.3s;
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+        .btn.red {
+            background-color: #e53935;
+        }
+        .btn.red:hover {
+            background-color: #d32f2f;
+        }
+        .btn.blue {
+            background-color: #2196F3;
+        }
+        .btn.blue:hover {
+            background-color: #1976D2;
+        }
+    </style>
+</head>
+<body>
+    <h2>{{ movement }} için {{ duration }} dakikalık seans başladı</h2>
+    <p>Kamera görüntüsüne tıklayarak tam ekran yapabilirsiniz.</p>
+
+    <div class="video-container">
+        <img id="cameraFeed" src="{{ url_for('video_feed') }}" width="720" height="540">
+    </div>
+
+    <div class="btn-group">
+        <form action="/stop_and_select" method="post">
+            <button class="btn red">🏠 Ana Sayfa</button>
+        </form>
+        <button class="btn blue" onclick="pauseSession()">⏸ Durdur</button>
+        <button class="btn" onclick="resumeSession()">▶ Devam Et</button>
+    </div>
+
+    <script>
+        let remainingTime = {{ duration }} * 60;
+        const interval = setInterval(() => {
+            remainingTime--;
+            if (remainingTime <= 0) {
+                clearInterval(interval);
+                window.location.href = "/completed";
+            }
+        }, 1000);
+
+        function pauseSession() {
+            fetch('/pause', { method: 'POST' });
+        }
+
+        function resumeSession() {
+            fetch('/resume', { method: 'POST' });
+        }
+
+        // Tam ekran için tıklama
+        document.getElementById("cameraFeed").addEventListener("click", function () {
+            if (this.requestFullscreen) {
+                this.requestFullscreen();
+            } else if (this.webkitRequestFullscreen) {
+                this.webkitRequestFullscreen();
+            } else if (this.msRequestFullscreen) {
+                this.msRequestFullscreen();
+            }
+        });
+    </script>
+</body>
+</html>
