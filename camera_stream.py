@@ -71,7 +71,7 @@ movement_module = module_map[movement]
 
 print("Kamera thread ile başlatıldı.")
 
-# Give initial instructions when exercise starts
+
 if not initial_instruction_given:
     play_correct_instruction(movement)
     initial_instruction_given = True
