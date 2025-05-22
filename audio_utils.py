@@ -34,7 +34,7 @@ def speak(text):
             for voice in voices:
                 if "turkish" in voice.name.lower() or "türkçe" in voice.name.lower() or "female" in voice.name.lower() or "kadın" in voice.name.lower():
                     voice_id = voice.id
-                    if "female" in voice.name.lower() or "kadın" in voice.name.lower(): # Kadın sesini önceliklendir
+                    if "female" in voice.name.lower() or "kadın" in voice.name.lower(): 
                         break 
             if voice_id:
                 engine.setProperty('voice', voice_id)
