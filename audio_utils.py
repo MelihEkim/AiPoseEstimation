@@ -17,8 +17,8 @@ ACIKLAMALAR = {
     "shoulder_press": "Shoulder Press için: Dirsekleri 90 derece bük, yukarı doğru uzat.",
     "high_knees": "High Knees için: Dizleri sırayla göğse doğru hızlıca kaldır.",
     "dumbbell_curl": "Dambıl hareketi için: Dirseği sabit tutarak ön kola ağırlığı yukarı çek, yavaşça indir.",
-    "lateral_raise": "Lateral Raise için: Kollarınızı hafifçe bükerek veya düz tutarak omuz hizasına kadar yanlara doğru kaldırın ve yavaşça indirin. Gövdenizi dik tutun.",
-    "biceps_hammer_curl": "Hammer Curl için: Avuç içleriniz vücudunuza bakacak şekilde dambılları tutun. Dirseklerinizi sabit tutarak ağırlıkları omuzlarınıza doğru kaldırın ve yavaşça başlangıç pozisyonuna indirin."
+    "lateral_raise": "Lateral Raise için: Kollarınızı hafifçe bükerek omuz hizasına kadar yanlara doğru kaldırın ve yavaşça indirin.",
+    "biceps_hammer_curl": "Hammer Curl için: Dirseklerinizi sabit tutarak ağırlıkları omuzlarınıza doğru kaldırın ve yavaşça başlangıç pozisyonuna indirin."
 }
 
 def speak(text):
