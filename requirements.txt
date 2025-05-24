@@ -3,6 +3,7 @@ flask_session
 pyrebase4
 mediapipe
 opencv-python
+google-generativeai
 numpy
 pyttsx3
 gtts
