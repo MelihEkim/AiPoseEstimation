@@ -5,12 +5,16 @@ import cv2
 import mediapipe as mp
 import threading
 import time
+import google.generativeai as genai
+import os
+
 from exercises import squat, pushup, plank, lunge, jumping_jack, situp, mountain_climber, side_plank, shoulder_press, high_knees, dumbbell_curl, lateral_raise, biceps_hammer_curl
 from utils import draw_timer, draw_success
 from audio_utils import speak_exercise_explanation, speak_congratulations, stop_audio
 from analysis_utils import analyze_progress_chart_data, get_firebase, analyze_progress
 
 def format_movement_name(name):
+    """Egzersiz adını okunabilir formata çevirir."""
     return name.replace("_", " ").title()
 
 app = Flask(__name__)
@@ -28,6 +32,23 @@ firebaseConfig = {
 firebase = pyrebase.initialize_app(firebaseConfig)
 auth = firebase.auth()
 db = firebase.database()
+
+
+YOUR_GEMINI_API_KEY = "AIzaSyBx-VICqvJhakcipZj0SC6LWRGDvKo4lkI" 
+IS_GEMINI_CONFIGURED = False
+
+if YOUR_GEMINI_API_KEY:
+    try:
+        genai.configure(api_key=YOUR_GEMINI_API_KEY)
+        print(">>> Google Gemini API anahtarı başarıyla yapılandırıldı. <<<")
+        IS_GEMINI_CONFIGURED = True
+    except Exception as e:
+        print(f"HATA: Google Gemini API anahtarı yapılandırılamadı: {e}")
+        IS_GEMINI_CONFIGURED = False
+else:
+    print(">>> UYARI: Google Gemini API anahtarı boş! Lütfen main.py dosyasını düzenleyin. <<<")
+    IS_GEMINI_CONFIGURED = False
+
 
 movement = ""
 duration_sec = 0
@@ -54,6 +75,7 @@ module_map = {
     "dumbbell_curl": dumbbell_curl, "lateral_raise": lateral_raise, "biceps_hammer_curl": biceps_hammer_curl
 }
 
+# VideoStream Sınıfı ve stop_camera Fonksiyonu
 class VideoStream:
     def __init__(self, src=0, width=640, height=480):
         global cap
@@ -90,6 +112,7 @@ def stop_camera():
     except Exception as e:
         print(f"Kamera kapatma hatası: {str(e)}")
 
+# generate_frames Fonksiyonu
 def generate_frames():
     global count, stage, uyari_verildi, dogru_yapiliyor, kayit_edildi, start_time, last_instruction_time, is_paused, elapsed_before_pause, vs, movement, duration_sec, user_email, pose, last_congrats_time, congrats_given_for_hold
     previous_rep_count_for_audio = count
@@ -189,6 +212,8 @@ def generate_frames():
     if vs is not None and vs.running:
         stop_camera()
 
+
+# --- Flask Rotaları ---
 @app.route('/')
 def home():
     stop_camera()
@@ -205,14 +230,10 @@ def register():
             return redirect(url_for('home'))
         except Exception as e:
             error_message = str(e)
-            if "EMAIL_EXISTS" in error_message:
-                return "Bu e-posta zaten kayıtlı."
-            elif "WEAK_PASSWORD" in error_message:
-                return "Şifre çok zayıf. En az 6 karakter olmalı."
-            elif "INVALID_EMAIL" in error_message:
-                return "Geçerli bir e-posta adresi girin."
-            else:
-                return f"Kayıt başarısız: {error_message}"
+            if "EMAIL_EXISTS" in error_message: return "Bu e-posta zaten kayıtlı."
+            elif "WEAK_PASSWORD" in error_message: return "Şifre çok zayıf. En az 6 karakter olmalı."
+            elif "INVALID_EMAIL" in error_message: return "Geçerli bir e-posta adresi girin."
+            else: return f"Kayıt başarısız: {error_message}"
     return render_template("register.html", brand="MotionMind")
 
 @app.route('/login', methods=['POST'])
@@ -232,53 +253,32 @@ def login():
 @app.route('/select')
 def select():
     stop_camera()
-    if 'user' not in session:
-        return redirect('/')
+    if 'user' not in session: return redirect('/')
     global user_email
-    if not user_email and 'user' in session:
-         user_email = session['user']
+    if not user_email and 'user' in session: user_email = session['user']
     return render_template("select.html", brand="MotionMind")
 
 @app.route('/start', methods=['POST'])
 def start():
     stop_camera()
     global movement, duration_sec, start_time, count, stage, uyari_verildi, dogru_yapiliyor, kayit_edildi, last_instruction_time, is_paused, elapsed_before_pause, last_congrats_time, congrats_given_for_hold, user_email
-    if 'user' not in session:
-        return redirect('/')
-    if 'user' in session:
-        user_email = session['user']
-    else:
-        return redirect('/')
+    if 'user' not in session: return redirect('/')
+    user_email = session['user']
     form_movement = request.form.get('movement')
-    if form_movement:
-        movement = form_movement.lower().replace(" ", "_")
-    elif session.get('last_movement'):
-        movement = session['last_movement']
-    else:
-        return redirect('/select')
+    if form_movement: movement = form_movement.lower().replace(" ", "_")
+    elif session.get('last_movement'): movement = session['last_movement']
+    else: return redirect('/select')
     form_duration = request.form.get('duration')
-    if form_duration:
-        duration = int(form_duration)
-    elif session.get('last_duration'):
-        duration = int(session.get('last_duration'))
-    else:
-        return redirect('/select')
+    if form_duration: duration = int(form_duration)
+    elif session.get('last_duration'): duration = int(session.get('last_duration'))
+    else: return redirect('/select')
     duration_sec = duration * 60
     start_time = time.time()
-    count = 0
-    stage = None
-    uyari_verildi = False
-    dogru_yapiliyor = False
-    kayit_edildi = False
-    last_instruction_time = 0
-    is_paused = False
-    elapsed_before_pause = 0
-    last_congrats_time = 0
-    congrats_given_for_hold = False
-    if hasattr(generate_frames, 'last_count_for_visual'):
-        delattr(generate_frames, 'last_count_for_visual')
-    else:
-        generate_frames.last_count_for_visual = 0
+    count = 0; stage = None; uyari_verildi = False; dogru_yapiliyor = False; kayit_edildi = False
+    last_instruction_time = 0; is_paused = False; elapsed_before_pause = 0
+    last_congrats_time = 0; congrats_given_for_hold = False
+    if hasattr(generate_frames, 'last_count_for_visual'): delattr(generate_frames, 'last_count_for_visual')
+    generate_frames.last_count_for_visual = 0
     session['last_movement'] = movement
     session['last_duration'] = duration
     speak_exercise_explanation(movement)
@@ -311,66 +311,48 @@ def resume():
 @app.route('/completed')
 def completed():
     stop_camera()
-    if 'user' not in session:
-        return redirect('/')
+    if 'user' not in session: return redirect('/')
     current_user_email = session.get('user', user_email)
-    if not current_user_email:
-         return redirect('/')
+    if not current_user_email: return redirect('/')
     user_key = current_user_email.replace(".", "_")
     yorum = analyze_progress(db, user_key)
     completed_movement_name = format_movement_name(session.get('last_movement', movement))
     completed_rep_count = count
     completed_duration_min = session.get('last_duration', duration_sec // 60)
     return render_template("completed.html",
-                           movement=completed_movement_name,
-                           count=completed_rep_count,
-                           duration=completed_duration_min,
-                           hedef=completed_rep_count + 2,
-                           yorum=yorum,
-                           brand="MotionMind")
+                           movement=completed_movement_name, count=completed_rep_count,
+                           duration=completed_duration_min, hedef=completed_rep_count + 2,
+                           yorum=yorum, brand="MotionMind")
 
 @app.route('/history')
 def history_route():
     stop_camera()
-    if 'user' not in session:
-        return redirect('/')
+    if 'user' not in session: return redirect('/')
     current_user_email = session.get('user', user_email)
-    if not current_user_email:
-         return redirect('/')
+    if not current_user_email: return redirect('/')
     user_key = current_user_email.replace(".", "_")
-    try:
-        history_data = db.child("users").child(user_key).child("history").get().val()
-    except Exception as e:
-        print(f"Firebase'den geçmiş verisi alınırken hata: {e}")
-        history_data = None
+    try: history_data = db.child("users").child(user_key).child("history").get().val()
+    except Exception as e: print(f"Firebase'den geçmiş verisi alınırken hata: {e}"); history_data = None
     return render_template("history.html", history=history_data, brand="MotionMind")
 
 @app.route('/progress')
 def progress():
     stop_camera()
-    if 'user' not in session:
-        return redirect('/')
+    if 'user' not in session: return redirect('/')
     current_user_email = session.get('user', user_email)
-    if not current_user_email:
-         return redirect('/')
+    if not current_user_email: return redirect('/')
     user_key = current_user_email.replace(".", "_")
-    try:
-        history_data = db.child("users").child(user_key).child("history").get().val()
-    except Exception as e:
-        print(f"Firebase'den ilerleme verisi alınırken hata: {e}")
-        history_data = None
+    try: history_data = db.child("users").child(user_key).child("history").get().val()
+    except Exception as e: print(f"Firebase'den ilerleme verisi alınırken hata: {e}"); history_data = None
     labels, values = analyze_progress_chart_data(history_data)
     return render_template("progress.html", labels=labels, values=values, brand="MotionMind")
 
 @app.route('/logout')
 def logout():
     global user_email, movement, duration_sec, count, stage, uyari_verildi, dogru_yapiliyor, kayit_edildi, start_time, last_instruction_time, is_paused, elapsed_before_pause, last_congrats_time, congrats_given_for_hold
-    session.pop('user', None)
-    session.pop('last_movement', None)
-    session.pop('last_duration', None)
+    session.pop('user', None); session.pop('last_movement', None); session.pop('last_duration', None)
     user_email = ""; movement = ""; duration_sec = 0; count = 0; stage = None; uyari_verildi = False; dogru_yapiliyor = False; kayit_edildi = False; start_time = 0; last_instruction_time = 0; is_paused = False; elapsed_before_pause = 0; last_congrats_time = 0; congrats_given_for_hold = False
-    if hasattr(generate_frames, 'last_count_for_visual'):
-        delattr(generate_frames, 'last_count_for_visual')
+    if hasattr(generate_frames, 'last_count_for_visual'): delattr(generate_frames, 'last_count_for_visual')
     stop_camera()
     return redirect('/')
 
@@ -381,95 +363,54 @@ def stop_and_select():
     stop_camera()
     return redirect('/select')
 
-chat_rules = {
-    "merhaba": "Merhaba! Ben MotionMind Asistanı. Antrenmanlarınız veya site kullanımı hakkında yardımcı olabilirim.",
-    "selam": "Selam! Ben MotionMind Asistanı. Nasıl yardımcı olabilirim?",
-    "nasılsın": "Harikayım! Antrenmana hazır mısınız?",
-    "yardım": "Elbette! Bana şunları sorabilirsiniz: \n<ul><li>Çalıştırmak istediğiniz kas grubu (örn: 'omuz', 'bacak çalışmak istiyorum', 'pazu')</li><li>Egzersiz bilgisi (örn: 'squat nedir?', 'dumbbell curl', 'lateral raise nedir')</li><li>Sayfaya gitme (örn: 'geçmiş sayfasına git', 'ilerlememi göster')</li></ul>",
-    "teşekkürler": "Rica ederim! Başka sorunuz var mı?",
-    "teşekkür ederim": "Rica ederim! Yardımcı olabildiğime sevindim.",
-    "geçmiş": "Antrenman geçmişinizi <a href='/history' target='_blank'>Geçmiş Kayıtları</a> sayfasında görebilirsiniz.",
-    "kayıtlar": "Antrenman kayıtlarınız için <a href='/history' target='_blank'>Geçmiş Kayıtları</a> sayfasına bakabilirsiniz.",
-    "ilerleme": "Haftalık ilerlemenizi <a href='/progress' target='_blank'>Gelişim Grafiği</a> sayfasında takip edebilirsiniz.",
-    "grafik": "Gelişim grafiğiniz <a href='/progress' target='_blank'>Gelişim Grafiği</a> sayfasındadır.",
-    "anasayfa": "Hareket ve süre seçimi için <a href='/select' target='_blank'>Ana Sayfa</a>'ya gidebilirsiniz.",
-    "seçim": "Hareket ve süre seçimi için <a href='/select' target='_blank'>Ana Sayfa</a>'ya gidebilirsiniz.",
-    "başla": "Yeni bir antrenmana başlamak için <a href='/select' target='_blank'>Ana Sayfa</a>'dan seçim yapmalısınız.",
-    "çıkış": "Hesabınızdan güvenle çıkmak için <a href='/logout'>Çıkış Yap</a> bağlantısını kullanın.",
-    "kapat": "Oturumu kapatmak için <a href='/logout'>Çıkış Yap</a> bağlantısını kullanın.",
-    "giriş": "Giriş yapmak için <a href='/'>Giriş Sayfası</a>'na gidin.",
-    "login": "Giriş yapmak için <a href='/'>Giriş Sayfası</a>'na gidin.",
-    "kayıt ol": "Yeni bir hesap oluşturmak için <a href='/register'>Kayıt Ol</a> sayfasına gidin.",
-    "üye ol": "Yeni bir hesap oluşturmak için <a href='/register'>Kayıt Ol</a> sayfasına gidin.",
-    "omuz": "Omuz kaslarınız için 'Shoulder Press' veya 'Lateral Raise' egzersizlerini öneririm. <a href='/select'>Seçim ekranından</a> deneyebilirsiniz.",
-    "bacak": "Bacak ve kalça kasları için 'Squat' veya 'Lunge' harika seçeneklerdir. <a href='/select'>Seçim ekranından</a> deneyebilirsiniz.",
-    "kalça": "Kalça ve bacakları şekillendirmek için 'Squat' ve 'Lunge' yapabilirsiniz. <a href='/select'>Seçim ekranından</a> deneyebilirsiniz.",
-    "popo": "Kalça (popo) ve bacaklar için 'Squat' ve 'Lunge' etkilidir. <a href='/select'>Seçim ekranından</a> deneyebilirsiniz.",
-    "göğüs": "Göğüs, omuz ve arka kol için 'Push-up' (Şınav) idealdir. <a href='/select'>Seçim ekranından</a> deneyebilirsiniz.",
-    "gogus": "Göğüs, omuz ve arka kol için 'Push-up' (Şınav) idealdir. <a href='/select'>Seçim ekranından</a> deneyebilirsiniz.",
-    "karın": "Karın kaslarınızı güçlendirmek için 'Sit-up', 'Plank' veya 'Side Plank' egzersizlerini yapabilirsiniz. <a href='/select'>Seçim ekranından</a> deneyebilirsiniz.",
-    "gobek": "Göbek eritmek ve karın kası için 'Sit-up', 'Plank', 'Mountain Climber' veya 'High Knees' deneyebilirsiniz. <a href='/select'>Seçim ekranından</a> deneyebilirsiniz.",
-    "sırt": "'Plank' ve 'Side Plank' sırtınızı da destekler, ancak doğrudan sırt egzersizimiz şu an bulunmuyor.",
-    "kol": "'Push-up' arka kolu (triceps), 'Shoulder Press' omuzları çalıştırır. Ön kol (biceps/pazu) için 'Dumbbell Curl' veya 'Biceps Hammer Curl' egzersizlerini yapabilirsiniz! Hepsini <a href='/select'>Seçim ekranından</a> başlatabilirsiniz.",
-    "biceps": "Biceps (pazu) kaslarınızı çalıştırmak için 'Dumbbell Curl' veya 'Biceps Hammer Curl' egzersizlerini deneyebilirsiniz. <a href='/select'>Seçim ekranından</a> başlatabilirsiniz.",
-    "pazu": "Pazu (biceps) kaslarınızı çalıştırmak için 'Dumbbell Curl' veya 'Biceps Hammer Curl' egzersizlerini deneyebilirsiniz. <a href='/select'>Seçim ekranından</a> başlatabilirsiniz.",
-    "kardiyo": "Kalp atışınızı hızlandırmak ve kalori yakmak için 'Jumping Jack', 'High Knees' veya 'Mountain Climber' yapabilirsiniz. <a href='/select'>Seçim ekranından</a> deneyebilirsiniz.",
-    "ısınma": "Isınma için 'Jumping Jack' veya 'High Knees' gibi hafif kardiyo hareketleri iyi olabilir. <a href='/select'>Seçim ekranından</a> deneyebilirsiniz.",
-    "tüm vücut": "Tüm vücudu kapsayan antrenmanlar için 'Jumping Jack', 'Mountain Climber', 'Plank' ve 'Push-up' gibi hareketleri birleştirebilirsiniz.",
-    "squat nedir": "'Squat', özellikle bacak ve kalça kaslarını çalıştıran temel bir çömelme hareketidir.",
-    "pushup nedir": "'Push-up' (Şınav), vücut ağırlığı ile yapılan, göğüs, omuz ve arka kolu çalıştıran bir itme hareketidir.",
-    "şınav nedir": "'Push-up' (Şınav), vücut ağırlığı ile yapılan, göğüs, omuz ve arka kolu çalıştıran bir itme hareketidir.",
-    "plank nedir": "'Plank', özellikle karın ve sırt kaslarını güçlendiren, sabit duruş (izometrik) egzersizidir.",
-    "lunge nedir": "'Lunge', tek bacakla öne adım atılarak yapılan, bacak ve kalça kaslarını hedefleyen bir egzersizdir.",
-    "jumping jack nedir": "'Jumping Jack', kollar ve bacakların senkronize olarak açılıp kapandığı bir kardiyo egzersizidir.",
-    "situp nedir": "'Sit-up', sırtüstü pozisyondan üst gövdenin kaldırılarak yapıldığı bir karın kası egzersizidir.",
-    "mekik nedir": "'Sit-up' (Mekik), sırtüstü pozisyondan üst gövdenin kaldırılarak yapıldığı bir karın kası egzersizidir.",
-    "mountain climber nedir": "'Mountain Climber', plank pozisyonunda dizlerin sırayla karna çekildiği, kardiyo ve karın egzersizidir.",
-    "side plank nedir": "'Side Plank', vücudun yan duruşta sabit kaldığı, özellikle yan karın kaslarını çalıştıran bir egzersizdir.",
-    "shoulder press nedir": "'Shoulder Press', omuz kaslarını hedef alan bir egzersizdir. <a href='/select'>Seçim ekranından</a> başlatabilirsiniz.",
-    "high knees nedir": "'High Knees', yerinde koşar gibi dizlerin yükseğe çekildiği bir kardiyo ve alt karın egzersizidir.",
-    "dumbbell curl": "Dumbbell Curl, pazu (biceps) kaslarınızı çalıştırmak için harika bir egzersizdir. <a href='/select'>Seçim ekranından</a> başlatıp takibini yapabilirsiniz.",
-    "curl nedir": "'Dumbbell Curl', pazu (biceps) kaslarını hedef alan temel bir ağırlık egzersizidir. <a href='/select'>Seçim ekranından</a> başlatıp formunuzu takip edebilirsiniz.",
-    "lateral raise nedir": "'Lateral Raise', özellikle omuzların yan kısımlarını (lateral deltoid) çalıştıran bir izolasyon egzersizidir. Kollar yana doğru kaldırılır.",
-    "yan omuz açış": "'Lateral Raise', özellikle omuzların yan kısımlarını (lateral deltoid) çalıştıran bir izolasyon egzersizidir. Kollar yana doğru kaldırılır.",
-    "hammer curl nedir": "'Biceps Hammer Curl', biceps brachii, brachialis ve brachioradialis kaslarını hedefleyen, avuç içlerinin birbirine baktığı nötr bir tutuşla yapılan bir curl varyasyonudur.",
-    "biceps hammer curl": "Biceps Hammer Curl egzersizini <a href='/select'>Seçim ekranından</a> başlatabilirsiniz.",
-    "lateral raise": "Lateral Raise egzersizini <a href='/select'>Seçim ekranından</a> başlatabilirsiniz.",
-}
-
+# --- Chatbot Rotası ---
 @app.route('/get_bot_response', methods=['POST'])
 def get_bot_response():
+    global IS_GEMINI_CONFIGURED
     user_message = request.json.get('message', '').lower()
-    user_message = ''.join(c for c in user_message if c.isalnum() or c.isspace() or c in ['ş','ı','ö','ç','ü','ğ','Ş','İ','Ö','Ç','Ü','Ğ'])
-    user_message = ' '.join(user_message.split())
-    bot_reply = "Üzgünüm, bu isteğinizi şimdilik anlayamadım. 'Yardım' yazarak neler sorabileceğinizi öğrenebilirsiniz."
-    matched = False; exercise_to_select = None
-    for keyword, response in sorted(chat_rules.items(), key=lambda item: len(item[0]), reverse=True):
-        if keyword in user_message:
-            bot_reply = response; matched = True
-            if keyword in ["omuz", "shoulder press nedir"]: exercise_to_select = "shoulder_press"
-            elif keyword in ["yan omuz açış", "lateral raise nedir", "lateral raise"]: exercise_to_select = "lateral_raise"
-            elif keyword in ["bacak", "kalça", "popo", "squat nedir"]: exercise_to_select = "squat"
-            elif keyword in ["lunge nedir"]: exercise_to_select = "lunge"
-            elif keyword in ["kol", "biceps", "pazu", "dumbbell curl", "curl nedir"]: exercise_to_select = "dumbbell_curl"
-            elif keyword in ["hammer curl nedir", "biceps hammer curl"]: exercise_to_select = "biceps_hammer_curl"
-            break
-    if not matched:
-        available_exercises_map = {
-            "squat": "squat", "pushup": "pushup", "şınav": "pushup", "plank": "plank",
-            "lunge": "lunge", "jumping jack": "jumping_jack", "situp": "situp", "mekik": "situp",
-            "mountain climber": "mountain_climber", "side plank": "side_plank",
-            "shoulder press": "shoulder_press", "high knees": "high_knees",
-            "dumbbell curl": "dumbbell_curl", "lateral raise": "lateral_raise", "biceps hammer curl": "biceps_hammer_curl"
-        }
-        for display_name, internal_name in available_exercises_map.items():
-            if display_name in user_message:
-                exercise_to_select = internal_name; specific_keyword_nedir = f"{display_name} nedir"
-                if specific_keyword_nedir in chat_rules: bot_reply = chat_rules[specific_keyword_nedir]
-                elif display_name in chat_rules: bot_reply = chat_rules[display_name]
-                else: bot_reply = f"'{display_name.title()}' egzersizini <a href='/select'>Seçim ekranından</a> başlatabilirsiniz."
-                matched = True; break
+    bot_reply = "Üzgünüm, şu anda size yardımcı olamıyorum. Lütfen daha sonra tekrar deneyin."
+    exercise_to_select = None
+
+    if not IS_GEMINI_CONFIGURED:
+         return jsonify({'response': "Google Gemini API anahtarı yapılandırılmamış veya geçersiz. Lütfen main.py dosyasını kontrol edin.", 'select_exercise': None})
+
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        prompt = (
+            "Sen MotionMind Asistanısın, yardımsever ve teşvik edici bir fitness koçusun. "
+            "Şu egzersizleri biliyorsun: Squat, Push-up (Şınav), Plank, Lunge, Jumping Jack, "
+            "Sit-up (Mekik), Mountain Climber, Side Plank, Shoulder Press, High Knees, "
+            "Dumbbell Curl, Lateral Raise, Biceps Hammer Curl. "
+            "Kas gruplarına (omuz, bacak, göğüs, karın, kol, kardiyo) göre egzersiz önerebilirsin. "
+            "Kullanıcıları şu sayfalara yönlendirebilirsin: /select (Ana Sayfa/Egzersiz Seçimi), "
+            "/history (Geçmiş), /progress (Gelişim). "
+            "Bir egzersiz sorulursa, kısaca açıkla ve /select sayfasından başlatabileceğini belirt. "
+            "Bir sayfa sorulursa, HTML linki (<a href='...'></a>) ile yanıt ver. "
+            "Yardım istenirse, yeteneklerini listele. "
+            "Yanıtlarını TÜRKÇE, kısa, net ve motive edici tut.\n\n"
+            f"Kullanıcı: {user_message}\n"
+            "Asistan:"
+        )
+        response = model.generate_content(prompt)
+        bot_reply = response.text.strip()
+        lower_reply = bot_reply.lower()
+        for key in module_map.keys():
+            if key.replace("_", " ").lower() in lower_reply and "/select" in lower_reply:
+                exercise_to_select = key
+                break
+    except Exception as e:
+        print(f"Google Gemini API Hatası: {e}")
+        error_str = str(e)
+        if "API_KEY_INVALID" in error_str or "API key not valid" in error_str:
+             bot_reply = "Google Gemini API anahtarınız geçersiz görünüyor. Lütfen doğru anahtarı girdiğinizden ve Gemini API için olduğundan emin olun."
+        elif "RESOURCE_EXHAUSTED" in error_str or "429" in error_str:
+             bot_reply = "Google Gemini API kullanım limitinize ulaştınız. Lütfen daha sonra tekrar deneyin veya Google AI Studio/Cloud Console'dan limitlerinizi kontrol edin."
+        else:
+             bot_reply = f"Google Gemini API'sinde bir sorun oluştu. Lütfen daha sonra tekrar deneyin."
+
     return jsonify({'response': bot_reply, 'select_exercise': exercise_to_select})
+
+
 
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=5000)
